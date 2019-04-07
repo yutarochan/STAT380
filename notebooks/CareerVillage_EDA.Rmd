@@ -1,0 +1,215 @@
+---
+title: "Career Village - Exploratory Data Anaysis"
+author: "Yuya Jeremy Ong & Tomoki Takasawa"
+date: 'Due: 03/02/2019'
+output:
+html_notebook: default
+---
+
+```{r Front Matter, include=FALSE}
+rm(list = ls())
+
+# Packages
+library(mdsr)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(scales)
+library(tokenizers)
+library(ngram)
+
+# Inputs and Source Data
+answers <- read_csv("../data/careervillage/answers.csv")
+comments <- read_csv("../data/careervillage/comments.csv")
+emails <- read_csv("../data/careervillage/emails.csv")
+group_memberships <- read_csv("../data/careervillage/group_memberships.csv")
+groups <- read_csv("../data/careervillage/groups.csv")
+matches <- read_csv("../data/careervillage/matches.csv")
+professionals <- read_csv("../data/careervillage/professionals.csv")
+questions <- read_csv("../data/careervillage/questions.csv")
+questions_score <- read_csv("../data/careervillage/question_scores.csv")
+school_memberships <- read_csv("../data/careervillage/school_memberships.csv")
+students <- read_csv("../data/careervillage/students.csv")
+tag_questions <- read_csv("../data/careervillage/tag_questions.csv")
+tag_users <- read_csv("../data/careervillage/tag_users.csv")
+tags <- read_csv("../data/careervillage/tags.csv")
+```
+
+# Career Village Exploratory Data Analysis
+
+## Individual Dataset Analysis
+### Student
+```{r}
+head(students, 5)
+count(students)
+```
+
+```{r}
+# Identify NAs for Student Location
+sum(is.na(students$students_location))
+```
+
+```{r}
+# Preprocess Date Joined
+students$students_date_joined <- as.Date(students$students_date_joined)
+students$date_num <- as.numeric(students$students_date_joined)
+
+# Setup Date Histogram
+bin <- 30
+ggplot(students, aes(date_num, ..count..)) +
+  geom_histogram(binwidth = bin, colour="white") +
+  ggtitle("Students Date Joined") +
+  xlab("Date") + 
+  ylab("Count")
+```
+
+### Group
+```{r}
+# Peek at Data
+head(groups, 5)
+count(groups)
+unique(groups$groups_group_type)
+```
+
+```{r}
+# Check Count of Group Type
+group_df <- groups %>%
+  count(groups$groups_group_type)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+head(group_memberships, 5)
+count(group_memberships)
+```
+
+### Group Memberships
+```{r}
+# Perform a Group by Sum of Membership Groups
+group_df <- group_memberships %>%
+  count(group_memberships_user_id)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+# Plot Membership Counts Per Group
+barplot(group_df$n, main="Membership Groups", xlab="Groups", ylab="Count")
+```
+
+```{r}
+# Join with Groups
+names(group_memberships)[1] <- "groups_id"
+merge(group_memberships, groups)
+```
+
+### School Memberships
+```{r}
+head(school_memberships, 5)
+count(school_memberships)
+```
+
+```{r}
+group_df <- school_memberships %>%
+  count(school_memberships$school_memberships_school_id)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+### Professionals
+```{r}
+head(professionals, 5)
+count(professionals)
+```
+
+```{r}
+# Find Number of NAs Per Feature
+sum(is.na(professionals$professionals_location))
+sum(is.na(professionals$professionals_industry))
+sum(is.na(professionals$professionals_headline))
+```
+
+```{r}
+# Preprocess Date Joined
+professionals$professionals_date_joined <- as.Date(professionals$professionals_date_joined)
+professionals$date_num <- as.numeric(professionals$professionals_date_joined)
+
+# Setup Date Histogram
+bin <- 30
+ggplot(professionals, aes(date_num, ..count..)) +
+  geom_histogram(binwidth = bin, colour="white") +
+  ggtitle("Professionals Date Joined") +
+  xlab("Date") + 
+  ylab("Count")
+```
+
+### Emails
+```{r}
+head(emails, 5)
+count(emails)
+```
+
+```{r}
+# Category Counts of Emails
+group_df <- emails %>%
+  count(emails$emails_frequency_level)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+# Preprocess Date Sent
+emails$emails_date_sent <- as.Date(emails$emails_date_sent)
+emails$date_num <- as.numeric(emails$emails_date_sent)
+
+# Setup Date Histogram
+bin <- 30
+ggplot(professionals, aes(date_num, ..count..)) +
+  geom_histogram(binwidth = bin, colour="white") +
+  ggtitle("Emails Date Sent") +
+  xlab("Date") + 
+  ylab("Count")
+```
+
+### Matches
+```{r}
+head(matches, 5)
+count(matches)
+```
+
+### Questions
+```{r}
+head(questions, 10)
+count(questions)
+
+questions <- data.frame(questions)
+```
+
+### Question Scores
+```{r}
+head(questions_score, 5)
+count(questions_score)
+```
+
+```{r}
+# Obtain Score Frequency
+group_df <- questions_score%>%
+  count(questions_score$score)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+qplot(group_df$n, geom="histogram", bins=30) +
+  ggtitle("Distribution of Question Scores") + 
+  xlab("Score") +
+  ylab("Count")
+```
+
