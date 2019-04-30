@@ -375,4 +375,46 @@ prof_counts <- pr_counts %>%
   group_by(professionals_location) %>%
   count()
 
+prof_counts
+```
+
+Merge with Salary Dataset
+```{r}
+# Load Salary Dataset
+salaries <- read_csv("../data/tabn211.60.csv")
+head(salaries)
+```
+
+```{r}
+# Visualize Relationships Between Two Years
+salaries$delta <- salaries$`2016` - salaries$`2015`
+ggplot(salaries, aes(x=`2015`, y=`2016`)) +
+  geom_point(aes(color=delta)) +
+  ggtitle("US States Teacher Salaries 2015 vs 2016") +
+  xlab("2015") + 
+  ylab("2016")
+```
+
+```{r}
+# Compute Average Salaries Two Years
+salaries$avg <- (salaries$`2016` + salaries$`2015`) / 2
+salaries
+```
+
+```{r}
+# Rename Columns for Consistency
+names(salaries)[1] <- "state"
+names(state_count)[1] <- "state"
+names(prof_counts)[1] <- "state"
+
+names(state_count)[2] <- "st_cnt" 
+names(state_count)[3] <- "st_ratio" 
+
+names(prof_counts)[2] <- "pf_cnt"
+
+# Merge Operation
+merge_df <- merge(salaries, state_count, by="state", all = TRUE)
+merge_df <- merge(merge_df, prof_counts, by="state", all = TRUE)
+
+merge_df
 ```
