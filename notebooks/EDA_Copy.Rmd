@@ -312,6 +312,15 @@ combinedData
 ```
 
 
+
+```{r}
+# examining data by mean and quartile
+x <- as.list(as.data.frame(combinedData$score))
+lapply(x, mean)
+lapply(x, quantile, probs = 1:3/4)
+sapply(x, quantile)
+```
+
 ## Regression
 
 ```{r}
