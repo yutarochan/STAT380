@@ -19,6 +19,7 @@ library(scales)
 library(tokenizers)
 library(ngram)
 library(text2vec)
+library(textmineR)
 
 # Inputs and Source Data
 answers <- read_csv("../data/careervillage/answers.csv")
@@ -280,19 +281,17 @@ head(questionsOfInterests)
 
 ### TF-IDF Vectorization
 ```{r}
-head(questionsOfInterests$questions_body)
+samples = sample(questionsOfInterests, 100, replace=FALSE)
 
-it_data = itoken(questionsOfInterests$questions_body,
+it_data = itoken(samples$questions_body,
        preprocessor = tolower,
        tokenizer = word_tokenizer,
-       ids = questionsOfInterests$id,
-       progressbar = FALSE)
+       ids = samples$id,
+       progressbar = FALSE,
+       na.rm=TRUE)
 
 vocab = create_vocabulary(it_data)
-vocab
-```
 
-```{r}
 vectorizer = vocab_vectorizer(vocab)
 dtm_data = create_dtm(it_data, vectorizer)
 
@@ -300,11 +299,80 @@ dtm_data = create_dtm(it_data, vectorizer)
 # Define Tf-idf Model
 tfidf = TfIdf$new()
 tfidf_data = fit_transform(dtm_data, tfidf)
-```
 
-```{r}
 vectors = transform(tfidf_data, tfidf)
+tf_mat <- TermDocFreq(dtm_data)
+
+tfidf <- t(dtm_data[ , tf_mat$term ]) * tf_mat$idf
+tfidf <- t(tfidf)
+
+csim <- tfidf / sqrt(rowSums(tfidf * tfidf))
+csim <- csim %*% t(csim)
+
+cdist <- as.dist(1 - csim)
 ```
 
+### Hierarchical Clustering of Questions
+```{r}
+hc <- hclust(cdist, method = "average")
 
+clustering <- cutree(hc, 20)
 
+par(cex=0.1)
+plot(hc, main = "Hierarchical clustering of Career Village Questions", ylab = "", xlab = "", yaxt = "n")
+
+rect.hclust(hc, 20, border = "red")
+```
+
+### Data Visualizations
+
+Teacher Salary vs Student Interest vs Professionals Avaiability Per State
+
+Identify Student Interest Per State
+```{r}
+# Identify Relative Interest of Students by State
+st_interest <- data.frame()
+for (st in state.name) {
+  res <- dplyr::filter(usersOfInterests, grepl(st, usersOfInterests$students_location))
+  st_interest <- rbind(st_interest, res)
+}
+
+# Persist Total Count
+total_count <- nrow(st_interest)
+
+# Normalize Location Data
+Pattern = paste0(paste0(".*\\b(", paste0(state.name, collapse="|")), ")\\b.*")
+st_interest$students_location = sub(Pattern, "\\1", st_interest$students_location)
+
+state_count <- st_interest %>%
+  group_by(students_location) %>%
+  count()
+
+state_count$int_ratio <- state_count$n / total_count
+state_count
+```
+
+Identify Number of Professionals Per State
+```{r}
+# Filter Professionals by States
+pr_counts <- data.frame()
+for (st in state.name) {
+  res <- dplyr::filter(professionals, grepl(st, professionals$professionals_location))
+  pr_counts <- rbind(pr_counts, res)
+}
+
+# Filter by Education
+pr_counts <- filter(pr_counts, pr_counts$professionals_industry == "Education")
+
+# Persist Total Count
+total_count <- nrow(pr_counts)
+
+# Normalize Location Data
+Pattern = paste0(paste0(".*\\b(", paste0(state.name, collapse="|")), ")\\b.*")
+pr_counts$professionals_location = sub(Pattern, "\\1", pr_counts$professionals_location)
+
+prof_counts <- pr_counts %>%
+  group_by(professionals_location) %>%
+  count()
+
+```
