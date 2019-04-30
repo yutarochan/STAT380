@@ -21,6 +21,10 @@ library(ngram)
 library(text2vec)
 library(textmineR)
 library("wordcloud")
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
 
 # Inputs and Source Data
 answers <- read_csv("../data/careervillage/answers.csv")
@@ -340,8 +344,8 @@ docs <- tm_map(docs, removePunctuation)
 docs <- tm_map(docs, stripWhitespace)
 
 # Word Cloud Visualization from Cluster
-dtm <- TermDocumentMatrix(vocab)
-m <- as.matrix(dtm_data)
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
 v <- sort(rowSums(m),decreasing=TRUE)
 d <- data.frame(word = names(v),freq=v)
 
