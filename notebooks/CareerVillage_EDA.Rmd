@@ -19,6 +19,7 @@ library(scales)
 library(tokenizers)
 library(ngram)
 library(text2vec)
+library(textmineR)
 
 # Inputs and Source Data
 answers <- read_csv("../data/careervillage/answers.csv")
@@ -280,19 +281,17 @@ head(questionsOfInterests)
 
 ### TF-IDF Vectorization
 ```{r}
-head(questionsOfInterests$questions_body)
+samples = sample(questionsOfInterests, 100, replace=FALSE)
 
-it_data = itoken(questionsOfInterests$questions_body,
+it_data = itoken(samples$questions_body,
        preprocessor = tolower,
        tokenizer = word_tokenizer,
-       ids = questionsOfInterests$id,
-       progressbar = FALSE)
+       ids = samples$id,
+       progressbar = FALSE,
+       na.rm=TRUE)
 
 vocab = create_vocabulary(it_data)
-vocab
-```
 
-```{r}
 vectorizer = vocab_vectorizer(vocab)
 dtm_data = create_dtm(it_data, vectorizer)
 
@@ -300,11 +299,29 @@ dtm_data = create_dtm(it_data, vectorizer)
 # Define Tf-idf Model
 tfidf = TfIdf$new()
 tfidf_data = fit_transform(dtm_data, tfidf)
-```
 
-```{r}
 vectors = transform(tfidf_data, tfidf)
+tf_mat <- TermDocFreq(dtm_data)
+
+tfidf <- t(dtm_data[ , tf_mat$term ]) * tf_mat$idf
+tfidf <- t(tfidf)
+
+csim <- tfidf / sqrt(rowSums(tfidf * tfidf))
+csim <- csim %*% t(csim)
+
+cdist <- as.dist(1 - csim)
 ```
 
+### Hierarchical Clustering of Questions
+```{r}
+hc <- hclust(cdist, method = "average")
 
+clustering <- cutree(hc, 20)
 
+# hc %>% raise.dendrogram (-1)
+
+# par(cex=0.1)
+# plot(hc, main = "Hierarchical clustering of Career Village Questions", ylab = "", xlab = "", yaxt = "n")
+
+# rect.hclust(hc, 20, border = "red")
+```
