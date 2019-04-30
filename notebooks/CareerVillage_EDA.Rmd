@@ -18,6 +18,7 @@ library(ggplot2)
 library(scales)
 library(tokenizers)
 library(ngram)
+library(text2vec)
 
 # Inputs and Source Data
 answers <- read_csv("../data/careervillage/answers.csv")
@@ -277,11 +278,33 @@ questionsOfInterests <- extractQuestionsOfInterests(tags, tag_questions, questio
 head(questionsOfInterests)
 ```
 
+### TF-IDF Vectorization
+```{r}
+head(questionsOfInterests$questions_body)
+
+it_data = itoken(questionsOfInterests$questions_body,
+       preprocessor = tolower,
+       tokenizer = word_tokenizer,
+       ids = questionsOfInterests$id,
+       progressbar = FALSE)
+
+vocab = create_vocabulary(it_data)
+vocab
+```
+
+```{r}
+vectorizer = vocab_vectorizer(vocab)
+dtm_data = create_dtm(it_data, vectorizer)
 
 
+# Define Tf-idf Model
+tfidf = TfIdf$new()
+tfidf_data = fit_transform(dtm_data, tfidf)
+```
 
-
-
+```{r}
+vectors = transform(tfidf_data, tfidf)
+```
 
 
 
