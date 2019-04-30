@@ -213,3 +213,57 @@ qplot(group_df$n, geom="histogram", bins=30) +
   ylab("Count")
 ```
 
+
+
+
+### Data Extraction
+```{r}
+extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, interest) {
+  tagsOfInterest <- tagTable %>% 
+    filter(tags_tag_name %in% interest) %>% 
+    pull(tags_tag_id)
+  
+  userIds <- userTagTable %>% 
+    filter(tag_users_tag_id %in% tagsOfInterest) %>%
+    select(tag_users_user_id) %>% 
+    pull(tag_users_user_id)
+  
+  table <- studentsTable %>% filter(students_id %in% userIds)
+  
+  return(table)
+}
+
+extractQuestionsOfInterests <- function(tagTable, questionTagTable, questionTable, questionScoreTable, interest) {
+  tagsOfInterest <- tagTable %>% 
+    filter(tags_tag_name %in% interest) %>% 
+    pull(tags_tag_id)
+  
+  questionIds <- questionTagTable %>% 
+    filter(tag_questions_tag_id %in% tagsOfInterest) %>%
+    select(tag_questions_question_id) %>% 
+    pull(tag_questions_question_id)
+  
+  table <- questionTable %>% filter(questions_id %in% questionIds)
+  names(table)[names(table) == 'questions_id'] <- 'id'
+  
+  total <- merge(table, questionScoreTable,by=c("id"))
+  return(total)
+}
+
+interest <- c('teaching', 'teacher', 'education', 'high school', 'school')
+usersOfInterests <- extractStudentsWithInterest(tags, tag_users, students, interest)
+head(usersOfInterests)
+
+
+questionsOfInterests <- extractQuestionsOfInterests(tags, tag_questions, questions, questions_score, interest)
+head(questionsOfInterests)
+```
+
+
+
+
+
+
+
+
+
