@@ -318,10 +318,61 @@ hc <- hclust(cdist, method = "average")
 
 clustering <- cutree(hc, 20)
 
-# hc %>% raise.dendrogram (-1)
+par(cex=0.1)
+plot(hc, main = "Hierarchical clustering of Career Village Questions", ylab = "", xlab = "", yaxt = "n")
 
-# par(cex=0.1)
-# plot(hc, main = "Hierarchical clustering of Career Village Questions", ylab = "", xlab = "", yaxt = "n")
+rect.hclust(hc, 20, border = "red")
+```
 
-# rect.hclust(hc, 20, border = "red")
+### Data Visualizations
+
+Teacher Salary vs Student Interest vs Professionals Avaiability Per State
+
+Identify Student Interest Per State
+```{r}
+# Identify Relative Interest of Students by State
+st_interest <- data.frame()
+for (st in state.name) {
+  res <- dplyr::filter(usersOfInterests, grepl(st, usersOfInterests$students_location))
+  st_interest <- rbind(st_interest, res)
+}
+
+# Persist Total Count
+total_count <- nrow(st_interest)
+
+# Normalize Location Data
+Pattern = paste0(paste0(".*\\b(", paste0(state.name, collapse="|")), ")\\b.*")
+st_interest$students_location = sub(Pattern, "\\1", st_interest$students_location)
+
+state_count <- st_interest %>%
+  group_by(students_location) %>%
+  count()
+
+state_count$int_ratio <- state_count$n / total_count
+state_count
+```
+
+Identify Number of Professionals Per State
+```{r}
+# Filter Professionals by States
+pr_counts <- data.frame()
+for (st in state.name) {
+  res <- dplyr::filter(professionals, grepl(st, professionals$professionals_location))
+  pr_counts <- rbind(pr_counts, res)
+}
+
+# Filter by Education
+pr_counts <- filter(pr_counts, pr_counts$professionals_industry == "Education")
+
+# Persist Total Count
+total_count <- nrow(pr_counts)
+
+# Normalize Location Data
+Pattern = paste0(paste0(".*\\b(", paste0(state.name, collapse="|")), ")\\b.*")
+pr_counts$professionals_location = sub(Pattern, "\\1", pr_counts$professionals_location)
+
+prof_counts <- pr_counts %>%
+  group_by(professionals_location) %>%
+  count()
+
 ```
