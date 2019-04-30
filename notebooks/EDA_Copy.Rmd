@@ -9,6 +9,8 @@ html_notebook: default
 ```{r Front Matter, include=FALSE}
 rm(list = ls())
 
+install.packages("text2vec")
+
 # Packages
 library(mdsr)
 library(dplyr)
@@ -18,6 +20,9 @@ library(ggplot2)
 library(scales)
 library(tokenizers)
 library(ngram)
+library(text2vec)
+library(randomForest)
+library(rpart)
 
 # Inputs and Source Data
 answers <- read_csv("../data/careervillage/answers.csv")
@@ -305,6 +310,157 @@ head(questionsOfInterests)
 combinedData <- merge(x = questionsOfInterests, y = usersOfInterests, by = "userId", all.X = TRUE)
 combinedData
 ```
+
+
+## Regression
+
+```{r}
+library(gbm)
+gradientBoostFeatureImportanceForRegression <- function(data){
+  mod_boost <- gbm(score ~ , distribution = "gaussian",
+                     data = data, n.trees = 3000, interaction.depth = 2)
+  mod_boost
+  msummary(mod_boost)
+}
+gradientBoostFeatureImportanceForRegression(combinedData)
+```
+
+
+### Supervised
+
+
+### TF-IDF Vectorization
+```{r}
+head(combinedData$questions_body)
+
+
+
+
+
+it_data = itoken(questionsOfInterests$questions_body,
+       preprocessor = tolower,
+       tokenizer = word_tokenizer,
+       ids = questionsOfInterests$id,
+       progressbar = FALSE)
+
+it_data
+
+vocab = create_vocabulary(it_data)
+vocab
+```
+
+```{r}
+vectorizer = vocab_vectorizer(vocab)
+dtm_data = create_dtm(it_data, vectorizer)
+
+
+# Define Tf-idf Model
+tfidf = TfIdf$new()
+tfidf_data = fit_transform(dtm_data, tfidf)
+```
+
+```{r}
+tfidf
+vectors = transform(tfidf_data, tfidf)
+vectors
+```
+
+
+
+
+```{r}
+
+library(glmnet)
+dtm_train = create_dtm(it_data, vectorizer)
+NFOLDS = 4
+t1 = Sys.time()
+dtm_train
+
+glmnet_classifier = cv.glmnet(x = dtm_train, y = combinedData$score, 
+                              family = 'gaussian', 
+                              # L1 penalty
+                              alpha = 1,
+                              # interested in the area under ROC curve
+                              type.measure = "auc",
+                              # 5-fold cross-validation
+                              nfolds = NFOLDS,
+                              # high value is less accurate, but has faster training
+                              thresh = 1e-3,
+                              # again lower number of iterations for faster training
+                              maxit = 1e3)
+print(difftime(Sys.time(), t1, units = 'sec'))
+```
+
+
+
+
+
+
+## Supervised Learning to predict score
+
+### split
+```{r}
+n <- nrow(combinedData)
+test_idx <- sample.int(n, size = round(0.20 * n))
+train <- combinedData[-test_idx, ]
+test <- combinedData[test_idx, ]
+```
+
+### linear model
+```{r}
+mod_logit <- glm(score ~ teacher + teaching + high + school + education, data = train, family = "gaussian")
+logitProb <- predict(mod_logit, newdata = test, type = "response")
+plot(logitProb)
+test <- test %>%
+  mutate(regression = logitProb)
+```
+
+
+### random forest
+```{r}
+mod_forest <- randomForest(score ~ teacher + teaching + high + school + education, data = train, ntree = 100, mtry = 2)
+mod_forest <- predict(mod_forest, newdata = test, type = "response")
+plot(mod_forest)
+test <- test %>%
+  mutate(forest = mod_forest)
+
+```
+
+# simple tree
+```{r}
+mod_tree <- rpart(score ~ teacher + teaching + high + school + education, data = train)
+tree_pred <- predict(mod_tree, newdata = test, type = "vector")
+plot(tree_pred)
+test <- test %>%
+  mutate(tree = tree_pred)
+```
+
+
+
+
+```{r}
+
+resultTest <- test %>%
+  select(regression, tree, forest, score) %>%
+  mutate(regression_diff = (as.double(regression) - score) ** 2,
+         tree_diff = (as.double(tree) - score) ** 2,
+         forest_diff = (as.double(forest) - score) ** 2)
+
+rmseRegression <- sqrt(mean(resultTest$regression_diff))
+rmseTree <- sqrt(mean(resultTest$tree_diff))
+rmseForest <- sqrt(mean(resultTest$forest_diff))
+
+rmseRegression
+rmseTree
+rmseForest
+
+
+```
+
+
+
+
+
 
 
 
