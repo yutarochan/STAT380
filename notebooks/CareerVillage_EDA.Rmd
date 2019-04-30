@@ -20,6 +20,7 @@ library(tokenizers)
 library(ngram)
 library(text2vec)
 library(textmineR)
+library("wordcloud")
 
 # Inputs and Source Data
 answers <- read_csv("../data/careervillage/answers.csv")
@@ -318,10 +319,35 @@ hc <- hclust(cdist, method = "average")
 
 clustering <- cutree(hc, 20)
 
-par(cex=0.1)
-plot(hc, main = "Hierarchical clustering of Career Village Questions", ylab = "", xlab = "", yaxt = "n")
+par(cex=0.5)
+plot(hc, main = "Hierarchical clustering of Sampled Career Village Questions", ylab = "", xlab = "", yaxt = "n")
 
 rect.hclust(hc, 20, border = "red")
+```
+
+```{r}
+# Preproces Question Title Data
+docs <- Corpus(VectorSource(questionsOfInterests$questions_title))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, removeWords, stopwords("english"))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, stripWhitespace)
+
+# Word Cloud Visualization from Cluster
+dtm <- TermDocumentMatrix(vocab)
+m <- as.matrix(dtm_data)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
 ```
 
 ### Data Visualizations
@@ -417,4 +443,11 @@ merge_df <- merge(salaries, state_count, by="state", all = TRUE)
 merge_df <- merge(merge_df, prof_counts, by="state", all = TRUE)
 
 merge_df
+```
+
+```{r}
+# Build Visualization
+ggplot(merge_df, aes(x=avg, y=st_ratio)) +
+  geom_point(aes(color=pf_cnt)) +
+  geom_text(label=merge_df$state, size=1.5, nudge_x = 0, nudge_y = 0.005)
 ```
