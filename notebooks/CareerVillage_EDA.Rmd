@@ -218,10 +218,15 @@ qplot(group_df$n, geom="histogram", bins=30) +
 
 ### Data Extraction
 ```{r}
-extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, interest) {
+extractTags <- function(tagTable, interest) {
   tagsOfInterest <- tagTable %>% 
     filter(tags_tag_name %in% interest) %>% 
     pull(tags_tag_id)
+  return(tagsOfInterest)
+}
+
+extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, interest) {
+  tagsOfInterest <- extractTags(tagTable, interest)
   
   userIds <- userTagTable %>% 
     filter(tag_users_tag_id %in% tagsOfInterest) %>%
@@ -234,9 +239,7 @@ extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, i
 }
 
 extractQuestionsOfInterests <- function(tagTable, questionTagTable, questionTable, questionScoreTable, interest) {
-  tagsOfInterest <- tagTable %>% 
-    filter(tags_tag_name %in% interest) %>% 
-    pull(tags_tag_id)
+  tagsOfInterest <- extractTags(tagTable, interest)
   
   questionIds <- questionTagTable %>% 
     filter(tag_questions_tag_id %in% tagsOfInterest) %>%
