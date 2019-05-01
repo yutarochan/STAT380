@@ -1,0 +1,203 @@
+---
+title: "Career Village - Exploratory Data Anaysis"
+author: "Yuya Jeremy Ong & Tomoki Takasawa"
+date: 'Due: 03/02/2019'
+output:
+html_notebook: default
+---
+
+```{r Front Matter, include=FALSE}
+rm(list = ls())
+
+
+# Packages
+library(mdsr)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(scales)
+library(tokenizers)
+library(ngram)
+library(text2vec)
+library(textmineR)
+
+# Inputs and Source Data
+answers <- read_csv("../data/careervillage/answers.csv")
+comments <- read_csv("../data/careervillage/comments.csv")
+emails <- read_csv("../data/careervillage/emails.csv")
+group_memberships <- read_csv("../data/careervillage/group_memberships.csv")
+groups <- read_csv("../data/careervillage/groups.csv")
+matches <- read_csv("../data/careervillage/matches.csv")
+professionals <- read_csv("../data/careervillage/professionals.csv")
+questions <- read_csv("../data/careervillage/questions.csv")
+questions_score <- read_csv("../data/careervillage/question_scores.csv")
+school_memberships <- read_csv("../data/careervillage/school_memberships.csv")
+students <- read_csv("../data/careervillage/students.csv")
+tag_questions <- read_csv("../data/careervillage/tag_questions.csv")
+tag_users <- read_csv("../data/careervillage/tag_users.csv")
+tags <- read_csv("../data/careervillage/tags.csv")
+```
+
+# Career Village Exploratory Data Analysis
+
+
+*tags of interests*
+```{r}
+# tags of interests
+interest <- c('teaching', 'teacher', 'education', 'high school', 'school')
+```
+
+## Data Extraction and PreProcessing
+
+*extractTags: User Defined Function to extract the vector of Ids for the interested tag given vector of tag Ids and table for the tags*
+```{r}
+extractTags <- function(tagTable, interest) {
+  tagsOfInterest <- tagTable %>% 
+    filter(tags_tag_name %in% interest) %>% 
+    pull(tags_tag_id)
+  return(tagsOfInterest)
+}
+```
+
+*extractStudentsWithInterest: User Defined Function to create a dataframe for students who posted one or more questions with tags of interests.*
+```{r}
+extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, interest) {
+  tagsOfInterest <- extractTags(tagTable, interest)
+  
+  userIds <- userTagTable %>% 
+    filter(tag_users_tag_id %in% tagsOfInterest) %>%
+    select(tag_users_user_id) %>% 
+    pull(tag_users_user_id)
+  
+  table <- studentsTable %>% 
+    filter(students_id %in% userIds) %>%
+    drop_na()
+  names(table)[names(table) == 'students_id'] <- 'userId'
+  return(table)
+}
+```
+
+*extractQuestionsOfInterests: User Defined Function to create a dataframe for questions and their rate(score) with tags of interests.*
+```{r}
+extractQuestionsOfInterests <- function(tagTable, questionTagTable, questionTable, questionScoreTable, interest) {
+  tagsOfInterest <- extractTags(tagTable, interest)
+  
+  df <- questionTagTable %>% 
+    filter(tag_questions_tag_id %in% tagsOfInterest)
+  
+  for (i in 1:length(interest)){
+    df <- df %>%
+      mutate('dummy' = ifelse(tag_questions_tag_id %in% tagsOfInterest[i],1,0))
+    names(df)[names(df) == 'dummy'] <- interest[i]
+  }
+  
+  df <- aggregate(. ~tag_questions_question_id, data=df, sum, na.rm=TRUE)
+  
+  questionIdVector <- df %>% 
+    pull(tag_questions_question_id)
+  
+  table <- questionTable %>% filter(questions_id %in% questionIdVector)
+  
+  df <- df %>% select(-tag_questions_tag_id)
+  print(df)
+  
+  names(df)[names(df) == 'tag_questions_question_id'] <- 'questions_id'
+  table <- merge(table, df,by=c("questions_id"))
+  
+  names(table)[names(table) == 'questions_id'] <- 'id'
+  total <- merge(table, questionScoreTable,by=c("id"))
+  
+  names(total)[names(total) == 'questions_author_id'] <- 'userId'
+  return(total)
+}
+```
+
+
+```{r}
+usersOfInterests <- extractStudentsWithInterest(tags, tag_users, students, interest)
+head(usersOfInterests)
+```
+
+```{r}
+questionsOfInterests <- extractQuestionsOfInterests(tags, tag_questions, questions, questions_score, interest)
+head(questionsOfInterests)
+```
+
+*merge to one table*
+```{r}
+combinedData <- merge(x = questionsOfInterests, y = usersOfInterests, by = "userId", all.X = TRUE)
+names(combinedData)[names(combinedData) == 'high school'] <- 'high'
+combinedData
+```
+
+
+## Data Analysis
+
+### Supervised Learning
+
+*examining data by mean and quartile*
+```{r}
+x <- as.list(as.data.frame(combinedData$score))
+lapply(x, mean)
+lapply(x, quantile, probs = 1:3/4)
+sapply(x, quantile)
+```
+
+#### split
+```{r}
+n <- nrow(combinedData)
+test_idx <- sample.int(n, size = round(0.20 * n))
+train <- combinedData[-test_idx, ]
+test <- combinedData[test_idx, ]
+```
+
+#### linear model
+```{r}
+mod_logit <- glm(score ~ teacher + teaching + high + school + education, data = train, family = "gaussian")
+logitProb <- predict(mod_logit, newdata = test, type = "response")
+plot(logitProb)
+test <- test %>%
+  mutate(regression = logitProb)
+```
+
+
+#### random forest
+```{r}
+mod_forest <- randomForest(score ~ teacher + teaching + high + school + education, data = train, ntree = 100, mtry = 2)
+mod_forest <- predict(mod_forest, newdata = test, type = "response")
+plot(mod_forest)
+test <- test %>%
+  mutate(forest = mod_forest)
+
+```
+
+#### simple tree
+```{r}
+mod_tree <- rpart(score ~ teacher + teaching + high + school + education, data = train)
+tree_pred <- predict(mod_tree, newdata = test, type = "vector")
+plot(tree_pred)
+test <- test %>%
+  mutate(tree = tree_pred)
+```
+
+
+
+### Accuracy Check
+```{r}
+
+resultTest <- test %>%
+  select(regression, tree, forest, score) %>%
+  mutate(regression_diff = (as.double(regression) - score) ** 2,
+         tree_diff = (as.double(tree) - score) ** 2,
+         forest_diff = (as.double(forest) - score) ** 2)
+
+rmseRegression <- sqrt(mean(resultTest$regression_diff))
+rmseTree <- sqrt(mean(resultTest$tree_diff))
+rmseForest <- sqrt(mean(resultTest$forest_diff))
+
+rmseRegression
+rmseTree
+rmseForest
+
+```
