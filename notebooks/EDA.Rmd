@@ -26,12 +26,11 @@ library(wordcloud)
 library(RColorBrewer)
 library(randomForest)
 library(rpart)
+library(usmap)
 
 # [Inputs and Source Data]
 # CareerVillage Datasets
 # Source: https://www.kaggle.com/c/data-science-for-good-careervillage/discussion/88316#latest-521963
-
-#Dataset that was given by Kaggle. This dataset include some tables we used such as students, questions, questions_tags, tags, question scores, and so on. It was provided by the Kaggle as a base data set. For the purpose of the anonymization, some of the tables is not much informative.
 answers <- read_csv("../data/careervillage/answers.csv")
 comments <- read_csv("../data/careervillage/comments.csv")
 emails <- read_csv("../data/careervillage/emails.csv")
@@ -113,8 +112,14 @@ extractQuestionsOfInterests <- function(tagTable, questionTagTable, questionTabl
 }
 ```
 
+## "Teachers are Important"
+They have helped to support a generation of thinkers, doers, and achievers. But recently, there has been a lack of teachers within the public education sector that will help sustain the future of America. For that we turn to ways we can provide incentives to help those that are interested in becoming teachers by looking at both compensation as well as educational support systems to push forward more teachers in the US public education system.
 
-## Exploratory Data Analysis
+We use data to find out what the current state of educational funding is like and how that is associated with interests from younger generations to become teachers in the field. Our hope is that this analysis will provide some key insights as to what we can better do to improve this situation by tacking specific states and areas that need more support - both financially and professionally.
+
+## Exploratory Data Analysis on CareerVillage Dataset
+Dataset that was given by Kaggle. This dataset include some tables we used such as students, questions, questions_tags, tags, question scores, and so on. It was provided by the Kaggle as a base data set. For the purpose of the anonymization, some of the tables is not much informative.
+
 First, we take a look at each of the dataset to get a good overview of what we are working with.
 
 ### Student
@@ -141,6 +146,7 @@ ggplot(students, aes(date_num, ..count..)) +
   xlab("Date") + 
   ylab("Count")
 ```
+
 
 ### Group
 ```{r}
@@ -241,6 +247,9 @@ ggplot(joint, aes(date_num, ..count..)) +
     ylab("Count")
 ```
 
+We see here that at one point there is a surge of new student users comming in, then a slowly increasing rise in professionals comming in. 
+However, we do see that student enrollment onto the forums is very few compared to professionals.
+
 ### Emails
 ```{r}
 head(emails, 5)
@@ -306,6 +315,27 @@ qplot(group_df$n, geom="histogram", bins=30) +
   ylab("Count")
 ```
 
+## Exploratory Data Analysis on the Teachers Income Dataset
+Another dataset we worked with is from the National Center for Education Statistics. They conduct various statistical studies to evaluate the state of Public Education System in the United States. For our analysis, we focused on using data between 2015 and 2016 on Annual Estimated Average Salaries for Primary and Secondary School Teachers in the United States for each state.
+
+```{r}
+head(salaries)
+```
+
+```{r}
+qplot(salaries$`2015`, geom="histogram", bins=30) +
+  ggtitle("Distribution of Salaries (2015)") + 
+  xlab("Salaries") +
+  ylab("Count")
+```
+
+```{r}
+qplot(salaries$`2016`, geom="histogram", bins=30) +
+  ggtitle("Distribution of Salaries (2016)") + 
+  xlab("Salaries") +
+  ylab("Count")
+```
+
 ## Data Extraction and Preprocessing
 
 For the purpose of this project, we only wanted to see the data for the students and questions that are related to the education field. Therefore, we picked up some of the keywords as “tags of interests”, and use this vector to filter out the questions and students that seem to be interested in this particular field.
@@ -317,7 +347,6 @@ Furthermore, in order to make the analysis easy, we got rid of some of the data 
 usersOfInterests <- extractStudentsWithInterest(tags, tag_users, students, interest)
 head(usersOfInterests)
 ```
-
 
 ```{r}
 # We generate a question-centric table for the list of questions people asked.
@@ -333,12 +362,11 @@ combinedData
 ```
 
 ## Data Analysis
-
 ### Supervised Learning
 
 We were interested in observing whether or not the choice of tags or some features of students somehow affect the quality of the question, rated as score. In order to answer this question, we used some of the supervised technique such as tree, random forest, and generalized linear model that takes in given features of students and binary flags indicating what tags students used and predict the score.
 
-*examining data by mean and quartile*
+First we perform some basic analysis on the data.
 ```{r}
 x <- as.list(as.data.frame(combinedData$score))
 lapply(x, mean)
@@ -346,7 +374,8 @@ lapply(x, quantile, probs = 1:3/4)
 sapply(x, quantile)
 ```
 
-#### split
+#### Train-Test Split
+First we split our dataset, 80% for training and 20% for testing.
 ```{r}
 # We used 80-20 split for the training and test data
 n <- nrow(combinedData)
@@ -355,7 +384,8 @@ train <- combinedData[-test_idx, ]
 test <- combinedData[test_idx, ]
 ```
 
-#### linear model
+#### Linear Model
+As a baseline, we train a linear model to our data.
 ```{r}
 mod_logit <- glm(score ~ teacher + teaching + high + school + education, data = train, family = "gaussian")
 logitProb <- predict(mod_logit, newdata = test, type = "response")
@@ -365,7 +395,8 @@ test <- test %>%
 ```
 
 
-#### random forest
+#### Random Forest
+To train a better model, we decided to train a Random Forest model.
 ```{r}
 mod_forest <- randomForest(score ~ teacher + teaching + high + school + education, data = train, ntree = 100, mtry = 2)
 mod_forest <- predict(mod_forest, newdata = test, type = "response")
@@ -375,7 +406,8 @@ test <- test %>%
 
 ```
 
-#### simple tree
+#### Simple Tree
+We also train a simple tree model as well for additional benchmarking.
 ```{r}
 mod_tree <- rpart(score ~ teacher + teaching + high + school + education, data = train)
 tree_pred <- predict(mod_tree, newdata = test, type = "vector")
@@ -405,6 +437,8 @@ rmseForest
 ```
 
 ### Unsupervised Learning
+In this analysis, we were curious to see if there was any sort of structure or groups of clusters that can be found in the data. If we find clusters, that indicates that there are communities within CV that have 
+
 ```{r}
 samples = sample(questionsOfInterests, 100, replace=FALSE)
 
@@ -449,6 +483,9 @@ plot(hc, main = "Hierarchical clustering of Sampled Career Village Questions", y
 rect.hclust(hc, 20, border = "red")
 ```
 
+Based on our findings, it seems there are some clusters that appear with regards to different topics.
+
+To make this more explicit, let's plot a word cloud to see what the general interests are within the clusters.
 ```{r}
 # Preproces Question Title Data
 docs <- Corpus(VectorSource(questionsOfInterests$questions_title))
@@ -578,3 +615,18 @@ ggplot(merge_df, aes(x=avg, y=st_ratio)) +
   xlab("Salaries") + 
   ylab("Interest Ratios")
 ```
+
+
+We saw previoously  that much of the average falls under 50,000, however we do see that 2016 did see a slight increase in salaries for some values.
+Let's break it down by state to see which states increased or decreased their salaries.
+```{r}
+plot_usmap(data = salaries, values = "delta", lines = "red") + 
+  scale_fill_continuous(name = "Salary Difference Between 2015 vs 2016", label = scales::comma) + 
+  theme(legend.position = "right")
+```
+
+## Conclusions
+Based on the analysis, we find that there are several things we can do to help the public education sector improve:
+1. We can allocate funding to parts of the US that are not really paying their teachers so that we can increase the chance of interest of students to become teachers.
+2. Career Village can work with the public - especially the states in those bottom left corner that aren't recieving funding to have both teachers first join, then inviting students to join as well.
+3. For this we need to make sure that students are able to attend college, and thus scholarships and other incentives to obtain a higher educational degree should be encouraged in these states.
