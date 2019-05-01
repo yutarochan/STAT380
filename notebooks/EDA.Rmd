@@ -30,6 +30,8 @@ library(rpart)
 # [Inputs and Source Data]
 # CareerVillage Datasets
 # Source: https://www.kaggle.com/c/data-science-for-good-careervillage/discussion/88316#latest-521963
+
+#Dataset that was given by Kaggle. This dataset include some tables we used such as students, questions, questions_tags, tags, question scores, and so on. It was provided by the Kaggle as a base data set. For the purpose of the anonymization, some of the tables is not much informative.
 answers <- read_csv("../data/careervillage/answers.csv")
 comments <- read_csv("../data/careervillage/comments.csv")
 emails <- read_csv("../data/careervillage/emails.csv")
@@ -305,22 +307,26 @@ qplot(group_df$n, geom="histogram", bins=30) +
 ```
 
 ## Data Extraction and Preprocessing
-We perform various preprocessing methods to extract the relevant field of interest for our data analysis in later phases.
 
-We generate a user-centric table of all students who joined CareerVillage along with their location data.
+For the purpose of this project, we only wanted to see the data for the students and questions that are related to the education field. Therefore, we picked up some of the keywords as “tags of interests”, and use this vector to filter out the questions and students that seem to be interested in this particular field.
+
+Then, we joined tables into one question-centric data frame. In this process, we created binary flags indicating whether or not each question has specific tags that we are interested in boolean value in order to avoid  duplicated data instances due to the joins of one-to-many relationship.
+
+Furthermore, in order to make the analysis easy, we got rid of some of the data that included NAs. 
 ```{r}
 usersOfInterests <- extractStudentsWithInterest(tags, tag_users, students, interest)
 head(usersOfInterests)
 ```
 
-We also generate a question-centric table for the list of questions people asked.
+
 ```{r}
+# We generate a question-centric table for the list of questions people asked.
 questionsOfInterests <- extractQuestionsOfInterests(tags, tag_questions, questions, questions_score, interest)
 head(questionsOfInterests)
 ```
 
-We then perform a merge between the two tables as a single table.
 ```{r}
+# We then perform a merge between the two tables as a single table.
 combinedData <- merge(x = questionsOfInterests, y = usersOfInterests, by = "userId", all.X = TRUE)
 names(combinedData)[names(combinedData) == 'high school'] <- 'high'
 combinedData
@@ -329,6 +335,8 @@ combinedData
 ## Data Analysis
 
 ### Supervised Learning
+
+We were interested in observing whether or not the choice of tags or some features of students somehow affect the quality of the question, rated as score. In order to answer this question, we used some of the supervised technique such as tree, random forest, and generalized linear model that takes in given features of students and binary flags indicating what tags students used and predict the score.
 
 *examining data by mean and quartile*
 ```{r}
@@ -340,6 +348,7 @@ sapply(x, quantile)
 
 #### split
 ```{r}
+# We used 80-20 split for the training and test data
 n <- nrow(combinedData)
 test_idx <- sample.int(n, size = round(0.20 * n))
 train <- combinedData[-test_idx, ]
@@ -377,6 +386,7 @@ test <- test %>%
 
 ### Accuracy Check
 ```{r}
+# In order to check the accuracy, we used rmse 
 
 resultTest <- test %>%
   select(regression, tree, forest, score) %>%
