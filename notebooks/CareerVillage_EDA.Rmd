@@ -2,8 +2,7 @@
 title: "Career Village - Exploratory Data Anaysis"
 author: "Yuya Jeremy Ong & Tomoki Takasawa"
 date: 'Due: 03/02/2019'
-output:
-html_notebook: default
+output: html_notebook
 ---
 
 ```{r Front Matter, include=FALSE}

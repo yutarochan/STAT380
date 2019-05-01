@@ -2,13 +2,11 @@
 title: "Career Village - Exploratory Data Anaysis"
 author: "Yuya Jeremy Ong & Tomoki Takasawa"
 date: 'Due: 03/02/2019'
-output:
-html_notebook: default
+output: html_notebook
 ---
 
 ```{r Front Matter, include=FALSE}
 rm(list = ls())
-
 
 # Packages
 library(mdsr)
@@ -21,8 +19,17 @@ library(tokenizers)
 library(ngram)
 library(text2vec)
 library(textmineR)
+library(wordcloud)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(randomForest)
+library(rpart)
 
-# Inputs and Source Data
+# [Inputs and Source Data]
+# CareerVillage Datasets
+# Source: https://www.kaggle.com/c/data-science-for-good-careervillage/discussion/88316#latest-521963
 answers <- read_csv("../data/careervillage/answers.csv")
 comments <- read_csv("../data/careervillage/comments.csv")
 emails <- read_csv("../data/careervillage/emails.csv")
@@ -37,31 +44,24 @@ students <- read_csv("../data/careervillage/students.csv")
 tag_questions <- read_csv("../data/careervillage/tag_questions.csv")
 tag_users <- read_csv("../data/careervillage/tag_users.csv")
 tags <- read_csv("../data/careervillage/tags.csv")
-```
 
-# Career Village Exploratory Data Analysis
+# National Center for Educational Statistics - Estimated Annual Salary of Elementary and Secondary School Teachers by State (2015 - 2016)
+# Source: https://nces.ed.gov/programs/digest/d17/tables/dt17_211.60.asp
+salaries <- read_csv("../data/tabn211.60.csv")
 
-
-*tags of interests*
-```{r}
-# tags of interests
+# [User Defined Functions & Constants]
+# Tags of Interest
 interest <- c('teaching', 'teacher', 'education', 'high school', 'school')
-```
 
-## Data Extraction and PreProcessing
-
-*extractTags: User Defined Function to extract the vector of Ids for the interested tag given vector of tag Ids and table for the tags*
-```{r}
+# extractTags: User Defined Function to extract the vector of Ids for the interested tag given vector of tag Ids and table for the tags*
 extractTags <- function(tagTable, interest) {
   tagsOfInterest <- tagTable %>% 
     filter(tags_tag_name %in% interest) %>% 
     pull(tags_tag_id)
   return(tagsOfInterest)
 }
-```
 
-*extractStudentsWithInterest: User Defined Function to create a dataframe for students who posted one or more questions with tags of interests.*
-```{r}
+# extractStudentsWithInterest: User Defined Function to create a dataframe for students who posted one or more questions with tags of interests.*
 extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, interest) {
   tagsOfInterest <- extractTags(tagTable, interest)
   
@@ -76,10 +76,8 @@ extractStudentsWithInterest <- function(tagTable, userTagTable, studentsTable, i
   names(table)[names(table) == 'students_id'] <- 'userId'
   return(table)
 }
-```
 
-*extractQuestionsOfInterests: User Defined Function to create a dataframe for questions and their rate(score) with tags of interests.*
-```{r}
+# extractQuestionsOfInterests: User Defined Function to create a dataframe for questions and their rate(score) with tags of interests.*
 extractQuestionsOfInterests <- function(tagTable, questionTagTable, questionTable, questionScoreTable, interest) {
   tagsOfInterest <- extractTags(tagTable, interest)
   
@@ -114,23 +112,219 @@ extractQuestionsOfInterests <- function(tagTable, questionTagTable, questionTabl
 ```
 
 
+## Exploratory Data Analysis
+First, we take a look at each of the dataset to get a good overview of what we are working with.
+
+### Student
+```{r}
+head(students, 5)
+count(students)
+```
+
+```{r}
+# Identify NAs for Student Location
+sum(is.na(students$students_location))
+```
+
+```{r}
+# Preprocess Date Joined
+students$students_date_joined <- as.Date(students$students_date_joined)
+students$date_num <- as.numeric(students$students_date_joined)
+
+# Setup Date Histogram
+bin <- 30
+ggplot(students, aes(date_num, ..count..)) +
+  geom_histogram(binwidth = bin, colour="white") +
+  ggtitle("Students Date Joined") +
+  xlab("Date") + 
+  ylab("Count")
+```
+
+### Group
+```{r}
+# Peek at Data
+head(groups, 5)
+count(groups)
+unique(groups$groups_group_type)
+```
+
+```{r}
+# Check Count of Group Type
+group_df <- groups %>%
+  count(groups$groups_group_type)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+head(group_memberships, 5)
+count(group_memberships)
+```
+
+### Group Memberships
+```{r}
+# Perform a Group by Sum of Membership Groups
+group_df <- group_memberships %>%
+  count(group_memberships_user_id)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+# Plot Membership Counts Per Group
+barplot(group_df$n, main="Membership Groups", xlab="Groups", ylab="Count")
+```
+
+```{r}
+# Join with Groups
+names(group_memberships)[1] <- "groups_id"
+merge(group_memberships, groups)
+```
+
+### School Memberships
+```{r}
+head(school_memberships, 5)
+count(school_memberships)
+```
+
+```{r}
+group_df <- school_memberships %>%
+  count(school_memberships$school_memberships_school_id)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+### Professionals
+```{r}
+head(professionals, 5)
+count(professionals)
+```
+
+```{r}
+# Find Number of NAs Per Feature
+sum(is.na(professionals$professionals_location))
+sum(is.na(professionals$professionals_industry))
+sum(is.na(professionals$professionals_headline))
+```
+
+```{r}
+# Preprocess Date Joined
+professionals$professionals_date_joined <- as.Date(professionals$professionals_date_joined)
+professionals$date_num <- as.numeric(professionals$professionals_date_joined)
+
+# Setup Date Histogram
+bin <- 30
+ggplot(professionals, aes(date_num, ..count..)) +
+  geom_histogram(binwidth = bin, colour="white") +
+  ggtitle("Professionals Date Joined") +
+  xlab("Date") + 
+  ylab("Count")
+```
+
+```{r}
+# Student vs Professional Join Date Timing
+joint <- rbind(
+  data.frame(date_num = students$date_num, user='student', type = "Cont"),
+  data.frame(date_num = professionals$date_num, user='prof', type = "Cont")
+)
+
+ggplot(joint, aes(date_num, ..count..)) + 
+    geom_histogram(data=subset(joint,user == 'student'),fill = "red", alpha = 0.2) +
+    geom_histogram(data=subset(joint,user == 'prof'),fill = "blue", alpha = 0.2) +
+    ggtitle("Temporal Distribution of Students vs Professionals Sign Up") +
+    xlab("Date") + 
+    ylab("Count")
+```
+
+### Emails
+```{r}
+head(emails, 5)
+count(emails)
+```
+
+```{r}
+# Category Counts of Emails
+group_df <- emails %>%
+  count(emails$emails_frequency_level)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+# Preprocess Date Sent
+emails$emails_date_sent <- as.Date(emails$emails_date_sent)
+emails$date_num <- as.numeric(emails$emails_date_sent)
+
+# Setup Date Histogram
+bin <- 30
+ggplot(professionals, aes(date_num, ..count..)) +
+  geom_histogram(binwidth = bin, colour="white") +
+  ggtitle("Emails Date Sent") +
+  xlab("Date") + 
+  ylab("Count")
+```
+
+### Matches
+```{r}
+head(matches, 5)
+count(matches)
+```
+
+### Questions
+```{r}
+head(questions, 10)
+count(questions)
+
+questions <- data.frame(questions)
+```
+
+### Question Scores
+```{r}
+head(questions_score, 5)
+count(questions_score)
+```
+
+```{r}
+# Obtain Score Frequency
+group_df <- questions_score%>%
+  count(questions_score$score)
+group_df <- data.frame(group_df)
+
+group_df[order(group_df$n, decreasing=TRUE), ]
+```
+
+```{r}
+qplot(group_df$n, geom="histogram", bins=30) +
+  ggtitle("Distribution of Question Scores") + 
+  xlab("Score") +
+  ylab("Count")
+```
+
+## Data Extraction and Preprocessing
+We perform various preprocessing methods to extract the relevant field of interest for our data analysis in later phases.
+
+We generate a user-centric table of all students who joined CareerVillage along with their location data.
 ```{r}
 usersOfInterests <- extractStudentsWithInterest(tags, tag_users, students, interest)
 head(usersOfInterests)
 ```
 
+We also generate a question-centric table for the list of questions people asked.
 ```{r}
 questionsOfInterests <- extractQuestionsOfInterests(tags, tag_questions, questions, questions_score, interest)
 head(questionsOfInterests)
 ```
 
-*merge to one table*
+We then perform a merge between the two tables as a single table.
 ```{r}
 combinedData <- merge(x = questionsOfInterests, y = usersOfInterests, by = "userId", all.X = TRUE)
 names(combinedData)[names(combinedData) == 'high school'] <- 'high'
 combinedData
 ```
-
 
 ## Data Analysis
 
@@ -181,8 +375,6 @@ test <- test %>%
   mutate(tree = tree_pred)
 ```
 
-
-
 ### Accuracy Check
 ```{r}
 
@@ -200,4 +392,179 @@ rmseRegression
 rmseTree
 rmseForest
 
+```
+
+### Unsupervised Learning
+```{r}
+samples = sample(questionsOfInterests, 100, replace=FALSE)
+
+it_data = itoken(samples$questions_body,
+       preprocessor = tolower,
+       tokenizer = word_tokenizer,
+       ids = samples$id,
+       progressbar = FALSE,
+       na.rm=TRUE)
+
+vocab = create_vocabulary(it_data)
+
+vectorizer = vocab_vectorizer(vocab)
+dtm_data = create_dtm(it_data, vectorizer)
+
+
+# Define Tf-idf Model
+tfidf = TfIdf$new()
+tfidf_data = fit_transform(dtm_data, tfidf)
+
+vectors = transform(tfidf_data, tfidf)
+tf_mat <- TermDocFreq(dtm_data)
+
+tfidf <- t(dtm_data[ , tf_mat$term ]) * tf_mat$idf
+tfidf <- t(tfidf)
+
+csim <- tfidf / sqrt(rowSums(tfidf * tfidf))
+csim <- csim %*% t(csim)
+
+cdist <- as.dist(1 - csim)
+```
+
+### Hierarchical Clustering of Questions
+```{r}
+hc <- hclust(cdist, method = "average")
+
+clustering <- cutree(hc, 20)
+
+par(cex=0.5)
+plot(hc, main = "Hierarchical clustering of Sampled Career Village Questions", ylab = "", xlab = "", yaxt = "n")
+
+rect.hclust(hc, 20, border = "red")
+```
+
+```{r}
+# Preproces Question Title Data
+docs <- Corpus(VectorSource(questionsOfInterests$questions_title))
+
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, removeWords, stopwords("english"))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, stripWhitespace)
+
+# Word Cloud Visualization from Cluster
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+### Data Visualizations
+
+Teacher Salary vs Student Interest vs Professionals Avaiability Per State
+
+Identify Student Interest Per State
+```{r}
+# Identify Relative Interest of Students by State
+st_interest <- data.frame()
+for (st in state.name) {
+  res <- dplyr::filter(usersOfInterests, grepl(st, usersOfInterests$students_location))
+  st_interest <- rbind(st_interest, res)
+}
+
+# Persist Total Count
+total_count <- nrow(st_interest)
+
+# Normalize Location Data
+Pattern = paste0(paste0(".*\\b(", paste0(state.name, collapse="|")), ")\\b.*")
+st_interest$students_location = sub(Pattern, "\\1", st_interest$students_location)
+
+state_count <- st_interest %>%
+  group_by(students_location) %>%
+  count()
+
+state_count$int_ratio <- state_count$n / total_count
+state_count
+```
+
+Identify Number of Professionals Per State
+```{r}
+# Filter Professionals by States
+pr_counts <- data.frame()
+for (st in state.name) {
+  res <- dplyr::filter(professionals, grepl(st, professionals$professionals_location))
+  pr_counts <- rbind(pr_counts, res)
+}
+
+# Filter by Education
+pr_counts <- filter(pr_counts, pr_counts$professionals_industry == "Education")
+
+# Persist Total Count
+total_count <- nrow(pr_counts)
+
+# Normalize Location Data
+Pattern = paste0(paste0(".*\\b(", paste0(state.name, collapse="|")), ")\\b.*")
+pr_counts$professionals_location = sub(Pattern, "\\1", pr_counts$professionals_location)
+
+prof_counts <- pr_counts %>%
+  group_by(professionals_location) %>%
+  count()
+
+prof_counts
+```
+
+Merge with Salary Dataset
+```{r}
+# Load Salary Dataset
+salaries <- read_csv("../data/tabn211.60.csv")
+head(salaries)
+```
+
+```{r}
+# Visualize Relationships Between Two Years
+salaries$delta <- salaries$`2016` - salaries$`2015`
+ggplot(salaries, aes(x=`2015`, y=`2016`)) +
+  geom_point(aes(color=delta)) +
+  ggtitle("US States Teacher Salaries 2015 vs 2016") +
+  xlab("2015") + 
+  ylab("2016")
+```
+
+```{r}
+# Compute Average Salaries Two Years
+salaries$avg <- (salaries$`2016` + salaries$`2015`) / 2
+salaries
+```
+
+```{r}
+# Rename Columns for Consistency
+names(salaries)[1] <- "state"
+names(state_count)[1] <- "state"
+names(prof_counts)[1] <- "state"
+
+names(state_count)[2] <- "st_cnt" 
+names(state_count)[3] <- "st_ratio" 
+
+names(prof_counts)[2] <- "pf_cnt"
+
+# Merge Operation
+merge_df <- merge(salaries, state_count, by="state", all = TRUE)
+merge_df <- merge(merge_df, prof_counts, by="state", all = TRUE)
+
+merge_df
+```
+
+```{r}
+# Build Visualization
+ggplot(merge_df, aes(x=avg, y=st_ratio)) +
+  geom_point(aes(color=pf_cnt)) +
+  geom_text(label=merge_df$state, size=1.5, nudge_x = 0, nudge_y = 0.005) +
+  ggtitle("US States Teacher Salaries vs Student Interest in CV vs Professionals Counts") +
+  xlab("Salaries") + 
+  ylab("Interest Ratios")
 ```
