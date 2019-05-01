@@ -155,6 +155,18 @@ ggplot(professionals, aes(date_num, ..count..)) +
   ylab("Count")
 ```
 
+```{r}
+# Student vs Professional Join Date Timing
+joint <- rbind(
+  data.frame(date_num = students$date_num, user='student', type = "Cont"),
+  data.frame(date_num = professionals$date_num, user='prof', type = "Cont")
+)
+
+ggplot(joint, aes(date_num, ..count..)) + 
+    geom_histogram(data=subset(joint,user == 'student'),fill = "red", alpha = 0.2) +
+    geom_histogram(data=subset(joint,user == 'prof'),fill = "blue", alpha = 0.2)
+```
+
 ### Emails
 ```{r}
 head(emails, 5)
